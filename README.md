@@ -1,6 +1,6 @@
 # 🗓️ dailylog
 
-A minimal journaling tool that launches your `$EDITOR`, captures your thoughts, and saves them into a daily file automatically named by date.
+A minimal journaling tool
 
 ## ✨ Features
 
@@ -10,6 +10,8 @@ A minimal journaling tool that launches your `$EDITOR`, captures your thoughts, 
 - Clean, dependency-light, and terminal-native
 
 ## 📦 Installation
+
+Requires Rust toolchain. [Install Rust](https://www.rust-lang.org/tools/install)
 
 ### Build from source
 
@@ -26,18 +28,6 @@ cp target/release/dailylog ~/.local/bin/
 cargo install dailylog
 ```
 
-(Requires Rust toolchain. [Install Rust](https://www.rust-lang.org/tools/install))
-
-### Download precompiled binary
-
-Visit the [Releases](https://github.com/cetanu/dailylog/releases) page and download the appropriate binary for your platform. Then:
-
-```bash
-chmod +x dailylog
-mv dailylog ~/.local/bin/
-```
-
-Make sure `~/.local/bin` is in your `$PATH`.
 
 ## ⚙️ Configuration
 
@@ -51,8 +41,6 @@ Make sure this directory exists, or `dailylog` will try to create it on first ru
 
 ## Usage
 
-Just run:
-
 ```bash
 dailylog
 ```
@@ -61,3 +49,5 @@ This will:
 1. Open your editor (via `$EDITOR` or default to `vim`)
 2. Save whatever you type into a file named like `2025-05-31.txt` inside your configured directory
 3. Append if the file already exists
+
+Note: on shells like `fish`, sometimes `$EDITOR` is not set to propagate to child processes. You can fix this with `set -Ux EDITOR myEditor`
