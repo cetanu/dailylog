@@ -64,17 +64,12 @@ fn append_to_log(path: &Path, content: &str) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    println!("Loading config");
     let config = load_config()?;
-    println!("Creating directory");
     fs::create_dir_all(&config.log_dir)?;
-    println!("Getting log file path");
     let log_path = get_log_file_path(&config.log_dir);
 
-    println!("Opening editor");
     let entry = open_editor()?;
     if !entry.trim().is_empty() {
-        println!("Appending");
         append_to_log(&log_path, &entry)?;
         println!("Log saved to {:?}", log_path);
     } else {
