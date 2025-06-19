@@ -23,6 +23,8 @@ struct Cli {
 enum Commands {
     /// View the previous day's log entry
     Previous,
+    /// Add to the previous day's log entry
+    Yesterday,
 }
 
 #[derive(Deserialize)]
@@ -156,6 +158,51 @@ fn view_previous_day_log(log_dir: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn add_to_previous_day_log(log_dir: &str) -> anyhow::Result<()> {
+    let log_path = get_previous_day_log_path(log_dir);
+    let yesterday = Local::now() - Duration::days(1);
+    let date_str = yesterday.format("%Y-%m-%d").to_string();
+    
+    // Show existing content if available
+    if log_path.exists() {
+        let content = fs::read_to_string(&log_path)?;
+        if !content.trim().is_empty() {
+            println!("Existing entry for {}:", date_str);
+            
+            // Print header with styling
+            let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Magenta)).set_bold(true))?;
+            writeln!(stdout, "=== Log entry for {} ===", date_str)?;
+            stdout.reset()?;
+            
+            // Render the content with markdown styling
+            render_markdown_to_terminal(&content)?;
+            
+            // Print footer with styling
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Magenta)).set_bold(true))?;
+            writeln!(stdout, "=== End of existing entry ===")?;
+            stdout.reset()?;
+            
+            println!("\nAppending to yesterday's log...");
+        } else {
+            println!("Creating new entry for yesterday ({})", date_str);
+        }
+    } else {
+        println!("Creating new entry for yesterday ({})", date_str);
+    }
+    
+    // Open editor for new content
+    let entry = open_editor()?;
+    if !entry.trim().is_empty() {
+        append_to_log(&log_path, &entry)?;
+        println!("Log saved to {:?}", log_path);
+    } else {
+        println!("No content written. Aborted.");
+    }
+    
+    Ok(())
+}
+
 fn open_editor() -> anyhow::Result<String> {
     let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
     let mut temp_path = env::temp_dir();
@@ -187,6 +234,9 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Some(Commands::Previous) => {
             view_previous_day_log(&config.log_dir)?;
+        }
+        Some(Commands::Yesterday) => {
+            add_to_previous_day_log(&config.log_dir)?;
         }
         None => {
             // Default behavior: create new log entry
