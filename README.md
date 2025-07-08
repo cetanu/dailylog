@@ -8,6 +8,7 @@ A minimal journaling tool
 - **Git commit style parsing**: First line becomes title, body after blank line
 - Saves entries with timestamps and markdown formatting to `YYYY-MM-DD.txt`
 - View previous day's log entry with `dailylog previous`
+- **Log summarization**: Review and analyze logs for the past X days with statistics
 - **Git sync support**: Sync logs across devices with automatic push/pull
 - Configurable log directory via a simple TOML config
 - Clean, dependency-light, and terminal-native
@@ -96,6 +97,24 @@ dailylog previous
 ```bash
 dailylog yesterday
 ```
+
+### Summarize and review logs for past X days
+
+```bash
+# Summarize logs for the past 7 days (default)
+dailylog summary
+
+# Summarize logs for the past 30 days
+dailylog summary --days 30
+
+# Short form
+dailylog summary -d 14
+```
+
+This command provides:
+- **Summary statistics**: Total entries, logging consistency percentage
+- **Daily breakdown**: Shows entry titles/headers for each day with entries
+- **Colorized output**: Easy-to-read format with different colors for different sections
 
 ### Git sync commands
 
