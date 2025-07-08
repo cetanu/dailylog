@@ -25,11 +25,19 @@ enum Commands {
     Previous,
     /// Add to the previous day's log entry
     Yesterday,
+    /// Sync logs with git repository
+    Sync,
+    /// Pull latest logs from git repository
+    Pull,
+    /// Push logs to git repository
+    Push,
 }
 
 #[derive(Deserialize)]
 struct Config {
     log_dir: String,
+    git_repo: Option<String>,
+    git_auto_sync: Option<bool>,
 }
 
 impl Default for Config {
@@ -41,6 +49,8 @@ impl Default for Config {
                 .join(".dailylog")
                 .to_string_lossy()
                 .into_owned(),
+            git_repo: None,
+            git_auto_sync: Some(false),
         }
     }
 }
@@ -220,9 +230,174 @@ fn open_editor() -> anyhow::Result<String> {
     Ok(contents)
 }
 
+fn parse_entry(content: &str) -> (Option<String>, String) {
+    let lines: Vec<&str> = content.lines().collect();
+    
+    if lines.is_empty() {
+        return (None, String::new());
+    }
+    
+    let title = lines[0].trim();
+    if title.is_empty() {
+        return (None, content.to_string());
+    }
+    
+    // Find the first blank line
+    let mut body_start = 1;
+    for (i, line) in lines.iter().enumerate().skip(1) {
+        if line.trim().is_empty() {
+            body_start = i + 1;
+            break;
+        }
+    }
+    
+    // If no blank line found, treat everything after first line as body
+    if body_start == 1 && lines.len() > 1 {
+        body_start = 1;
+    }
+    
+    let body = if body_start < lines.len() {
+        lines[body_start..].join("\n").trim().to_string()
+    } else {
+        String::new()
+    };
+    
+    (Some(title.to_string()), body)
+}
+
+fn format_entry(title: Option<&str>, body: &str) -> String {
+    match title {
+        Some(title) if !title.is_empty() => {
+            let timestamp = Local::now().format("%H:%M").to_string();
+            if body.is_empty() {
+                format!("## {} - {}\n", timestamp, title)
+            } else {
+                format!("## {} - {}\n\n{}\n", timestamp, title, body)
+            }
+        }
+        _ => {
+            if body.is_empty() {
+                String::new()
+            } else {
+                format!("{}\n", body)
+            }
+        }
+    }
+}
+
+fn is_git_repo(log_dir: &str) -> bool {
+    Path::new(log_dir).join(".git").exists()
+}
+
+fn run_git_command(log_dir: &str, args: &[&str]) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(log_dir)
+        .output()?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!("Git command failed: {}", stderr));
+    }
+    
+    Ok(())
+}
+
+fn init_git_repo(log_dir: &str, repo_url: &str) -> anyhow::Result<()> {
+    if is_git_repo(log_dir) {
+        println!("Git repository already exists in {}", log_dir);
+        return Ok(());
+    }
+    
+    println!("Initializing git repository in {}", log_dir);
+    run_git_command(log_dir, &["init"])?;
+    run_git_command(log_dir, &["remote", "add", "origin", repo_url])?;
+    
+    // Try to pull existing logs
+    if let Err(e) = run_git_command(log_dir, &["pull", "origin", "main"]) {
+        println!("Note: Could not pull from remote (this is normal for new repos): {}", e);
+        // Create initial commit
+        run_git_command(log_dir, &["checkout", "-b", "main"])?;
+    }
+    
+    Ok(())
+}
+
+fn git_pull(log_dir: &str) -> anyhow::Result<()> {
+    if !is_git_repo(log_dir) {
+        return Err(anyhow::anyhow!("Not a git repository. Use 'dailylog sync' to set up git sync first."));
+    }
+    
+    println!("Pulling latest logs from git repository...");
+    run_git_command(log_dir, &["pull", "origin", "main"])?;
+    println!("Successfully pulled latest logs.");
+    
+    Ok(())
+}
+
+fn git_push(log_dir: &str) -> anyhow::Result<()> {
+    if !is_git_repo(log_dir) {
+        return Err(anyhow::anyhow!("Not a git repository. Use 'dailylog sync' to set up git sync first."));
+    }
+    
+    // Add all log files
+    run_git_command(log_dir, &["add", "*.txt"])?;
+    
+    // Check if there are changes to commit
+    let status_output = Command::new("git")
+        .args(&["status", "--porcelain"])
+        .current_dir(log_dir)
+        .output()?;
+    
+    if status_output.stdout.is_empty() {
+        println!("No changes to push.");
+        return Ok(());
+    }
+    
+    // Commit with timestamp
+    let commit_msg = format!("Update logs - {}", Local::now().format("%Y-%m-%d %H:%M"));
+    run_git_command(log_dir, &["commit", "-m", &commit_msg])?;
+    
+    println!("Pushing logs to git repository...");
+    run_git_command(log_dir, &["push", "origin", "main"])?;
+    println!("Successfully pushed logs.");
+    
+    Ok(())
+}
+
+fn git_sync(config: &Config) -> anyhow::Result<()> {
+    let repo_url = config.git_repo.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("No git repository configured. Please add 'git_repo = \"your-repo-url\"' to ~/.dailylog.toml"))?;
+    
+    if !is_git_repo(&config.log_dir) {
+        init_git_repo(&config.log_dir, repo_url)?;
+    }
+    
+    // Pull first, then push
+    git_pull(&config.log_dir)?;
+    git_push(&config.log_dir)?;
+    
+    Ok(())
+}
+
+fn auto_sync_if_enabled(config: &Config) -> anyhow::Result<()> {
+    if config.git_auto_sync.unwrap_or(false) && config.git_repo.is_some() {
+        if let Err(e) = git_sync(config) {
+            eprintln!("Warning: Auto-sync failed: {}", e);
+        }
+    }
+    Ok(())
+}
+
 fn append_to_log(path: &Path, content: &str) -> anyhow::Result<()> {
-    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-    writeln!(file, "{}", content)?;
+    let (title, body) = parse_entry(content);
+    let formatted_entry = format_entry(title.as_deref(), &body);
+    
+    if !formatted_entry.trim().is_empty() {
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        writeln!(file, "{}", formatted_entry)?;
+    }
+    
     Ok(())
 }
 
@@ -237,6 +412,16 @@ fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Yesterday) => {
             add_to_previous_day_log(&config.log_dir)?;
+            auto_sync_if_enabled(&config)?;
+        }
+        Some(Commands::Sync) => {
+            git_sync(&config)?;
+        }
+        Some(Commands::Pull) => {
+            git_pull(&config.log_dir)?;
+        }
+        Some(Commands::Push) => {
+            git_push(&config.log_dir)?;
         }
         None => {
             // Default behavior: create new log entry
@@ -245,6 +430,7 @@ fn main() -> anyhow::Result<()> {
             if !entry.trim().is_empty() {
                 append_to_log(&log_path, &entry)?;
                 println!("Log saved to {:?}", log_path);
+                auto_sync_if_enabled(&config)?;
             } else {
                 println!("No content written. Aborted.");
             }
