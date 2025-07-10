@@ -6,7 +6,7 @@ A minimal journaling tool
 
 - Opens your `$EDITOR` (defaults to `vim`) to write an entry
 - **Git commit style parsing**: First line becomes title, body after blank line
-- Saves entries with timestamps and markdown formatting to `YYYY-MM-DD.txt`
+- Saves entries with timestamps and markdown formatting to `YYYY-MM-DD.md`
 - View previous day's log entry with `dailylog previous`
 - **Log summarization**: Review and analyze logs for the past X days with statistics
 - **Git sync support**: Sync logs across devices with automatic push/pull
@@ -61,7 +61,7 @@ dailylog
 This will:
 1. Open your editor (via `$EDITOR` or default to `vim`)
 2. Parse your input using git commit style (title on first line, body after blank line)
-3. Save formatted entry with timestamp to a file like `2025-05-31.txt`
+3. Save formatted entry with timestamp to a file like `2025-05-31.md`
 4. Auto-sync with git if enabled
 
 **Entry format example:**

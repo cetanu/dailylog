@@ -70,18 +70,18 @@ fn load_config() -> anyhow::Result<Config> {
 
 fn get_log_file_path(log_dir: &str) -> PathBuf {
     let date = Local::now().format("%Y-%m-%d").to_string();
-    Path::new(log_dir).join(format!("{date}.txt"))
+    Path::new(log_dir).join(format!("{date}.md"))
 }
 
 fn get_previous_day_log_path(log_dir: &str) -> PathBuf {
     let yesterday = Local::now() - Duration::days(1);
     let date = yesterday.format("%Y-%m-%d").to_string();
-    Path::new(log_dir).join(format!("{date}.txt"))
+    Path::new(log_dir).join(format!("{date}.md"))
 }
 
 fn get_log_file_path_for_date(log_dir: &str, date: NaiveDate) -> PathBuf {
     let date_str = date.format("%Y-%m-%d").to_string();
-    Path::new(log_dir).join(format!("{date_str}.txt"))
+    Path::new(log_dir).join(format!("{date_str}.md"))
 }
 
 fn render_markdown_to_terminal(content: &str) -> anyhow::Result<()> {
@@ -230,7 +230,7 @@ fn add_to_previous_day_log(log_dir: &str) -> anyhow::Result<()> {
 fn open_editor() -> anyhow::Result<String> {
     let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
     let mut temp_path = env::temp_dir();
-    temp_path.push("dailylog.tmp");
+    temp_path.push("dailylog.md");
 
     File::create(&temp_path)?;
 
@@ -362,7 +362,7 @@ fn git_push(log_dir: &str, branch: &str) -> anyhow::Result<()> {
     }
 
     // Add all log files
-    run_git_command(log_dir, &["add", "*.txt"])?;
+    run_git_command(log_dir, &["add", "*.md"])?;
 
     // Check if there are changes to commit
     let status_output = Command::new("git")
