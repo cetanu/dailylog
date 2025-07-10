@@ -1,8 +1,37 @@
+//! Log analysis and summary statistics.
+//!
+//! This module provides functionality for analyzing daily logs over time,
+//! generating statistics about logging consistency, and displaying
+//! summaries with colorized output.
+
 use crate::{config::Config, entry::get_log_file_path_for_date};
 use chrono::{Datelike, Duration, Local, Weekday};
 use std::{fs, io::Write};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
+/// Parses a day string into a `Weekday` enum.
+///
+/// Accepts both full day names and three-letter abbreviations,
+/// case-insensitive.
+///
+/// # Arguments
+///
+/// * `day_str` - The day string to parse (e.g., "monday", "Mon", "tue")
+///
+/// # Returns
+///
+/// `Some(Weekday)` if the string is recognized, `None` otherwise.
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::summary::parse_weekday;
+/// use chrono::Weekday;
+///
+/// assert_eq!(parse_weekday("monday"), Some(Weekday::Mon));
+/// assert_eq!(parse_weekday("tue"), Some(Weekday::Tue));
+/// assert_eq!(parse_weekday("invalid"), None);
+/// ```
 fn parse_weekday(day_str: &str) -> Option<Weekday> {
     match day_str.to_lowercase().as_str() {
         "monday" | "mon" => Some(Weekday::Mon),
@@ -16,6 +45,35 @@ fn parse_weekday(day_str: &str) -> Option<Weekday> {
     }
 }
 
+/// Generates and displays a summary of log entries over a specified period.
+///
+/// Analyzes log files for the past N days and provides:
+/// - Summary statistics (total entries, consistency percentage)
+/// - Daily breakdown showing entry titles for each day
+/// - Colorized output for easy reading
+/// - Filtering based on configured summary days (e.g., weekdays only)
+///
+/// # Arguments
+///
+/// * `log_dir` - The directory containing log files
+/// * `days` - Number of days to analyze (going backwards from today)
+/// * `config` - Application configuration containing summary day filters
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Log files cannot be read
+/// - Terminal output fails
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::summary::summarize_logs;
+/// use dailylog::config::load_config;
+///
+/// let config = load_config()?;
+/// summarize_logs("/path/to/logs", 7, &config)?;
+/// ```
 pub fn summarize_logs(log_dir: &str, days: u32, config: &Config) -> anyhow::Result<()> {
     let today = Local::now().date_naive();
     let mut total_entries = 0;
@@ -116,6 +174,29 @@ pub fn summarize_logs(log_dir: &str, days: u32, config: &Config) -> anyhow::Resu
     Ok(())
 }
 
+/// Extracts entry titles from log file content.
+///
+/// Parses markdown content to find entry titles from:
+/// - Level 2 headers in timestamp format: `## HH:MM - title`
+/// - Other markdown headers (H1, H3)
+///
+/// # Arguments
+///
+/// * `content` - The markdown content to parse
+///
+/// # Returns
+///
+/// A vector of extracted titles as strings.
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::summary::extract_entry_titles;
+///
+/// let content = "## 14:30 - Meeting notes\n\nDiscussed project timeline.\n\n## 16:00 - Code review";
+/// let titles = extract_entry_titles(content);
+/// assert_eq!(titles, vec!["Meeting notes", "Code review"]);
+/// ```
 fn extract_entry_titles(content: &str) -> Vec<String> {
     let mut titles = Vec::new();
 

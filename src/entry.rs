@@ -1,3 +1,9 @@
+//! Entry management and file operations.
+//!
+//! This module handles creating, parsing, and formatting journal entries.
+//! It manages the git commit-style parsing (title on first line, body after blank line)
+//! and file I/O operations for daily log files.
+
 use chrono::{Duration, Local, NaiveDate};
 use std::{
     env,
@@ -7,22 +13,78 @@ use std::{
     process::Command,
 };
 
+/// Returns the file path for today's log entry.
+///
+/// Generates a path in the format `{log_dir}/YYYY-MM-DD.md` for the current date.
+///
+/// # Arguments
+///
+/// * `log_dir` - The directory where log files are stored
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::entry::get_log_file_path;
+/// 
+/// let path = get_log_file_path("/home/user/.dailylog");
+/// // Returns something like "/home/user/.dailylog/2024-01-15.md"
+/// ```
 pub fn get_log_file_path(log_dir: &str) -> PathBuf {
     let date = Local::now().format("%Y-%m-%d").to_string();
     Path::new(log_dir).join(format!("{date}.md"))
 }
 
+/// Returns the file path for yesterday's log entry.
+///
+/// Generates a path in the format `{log_dir}/YYYY-MM-DD.md` for yesterday's date.
+///
+/// # Arguments
+///
+/// * `log_dir` - The directory where log files are stored
 pub fn get_previous_day_log_path(log_dir: &str) -> PathBuf {
     let yesterday = Local::now() - Duration::days(1);
     let date = yesterday.format("%Y-%m-%d").to_string();
     Path::new(log_dir).join(format!("{date}.md"))
 }
 
+/// Returns the file path for a specific date's log entry.
+///
+/// Generates a path in the format `{log_dir}/YYYY-MM-DD.md` for the given date.
+///
+/// # Arguments
+///
+/// * `log_dir` - The directory where log files are stored
+/// * `date` - The specific date for the log entry
 pub fn get_log_file_path_for_date(log_dir: &str, date: NaiveDate) -> PathBuf {
     let date_str = date.format("%Y-%m-%d").to_string();
     Path::new(log_dir).join(format!("{date_str}.md"))
 }
 
+/// Opens the user's preferred editor to create a journal entry.
+///
+/// Creates a temporary file and launches the editor specified by the `$EDITOR`
+/// environment variable (defaults to `vim` if not set). After the editor closes,
+/// reads and returns the content that was written.
+///
+/// # Returns
+///
+/// The content written in the editor as a string.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The temporary file cannot be created
+/// - The editor fails to launch
+/// - The temporary file cannot be read after editing
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::entry::open_editor;
+///
+/// let content = open_editor()?;
+/// println!("User wrote: {}", content);
+/// ```
 pub fn open_editor() -> anyhow::Result<String> {
     let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
     let mut temp_path = env::temp_dir();
@@ -40,6 +102,34 @@ pub fn open_editor() -> anyhow::Result<String> {
     Ok(contents)
 }
 
+/// Parses entry content using git commit message style.
+///
+/// Follows the git commit convention:
+/// - First line becomes the title
+/// - Content after the first blank line becomes the body
+/// - If no blank line is found, everything after the first line is treated as body
+///
+/// # Arguments
+///
+/// * `content` - The raw content from the editor
+///
+/// # Returns
+///
+/// A tuple of `(title, body)` where:
+/// - `title` is `Some(String)` if a title was found, `None` otherwise
+/// - `body` is the remaining content as a string
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::entry::parse_entry;
+///
+/// let content = "Fixed authentication bug\n\nUpdated the login system to handle edge cases.";
+/// let (title, body) = parse_entry(content);
+/// 
+/// assert_eq!(title, Some("Fixed authentication bug".to_string()));
+/// assert_eq!(body, "Updated the login system to handle edge cases.");
+/// ```
 pub fn parse_entry(content: &str) -> (Option<String>, String) {
     let lines: Vec<&str> = content.lines().collect();
 
@@ -75,6 +165,29 @@ pub fn parse_entry(content: &str) -> (Option<String>, String) {
     (Some(title.to_string()), body)
 }
 
+/// Formats a parsed entry into markdown with timestamp.
+///
+/// Creates a markdown-formatted entry with:
+/// - A level 2 header with timestamp and title (if title exists)
+/// - The body content below (if body exists)
+///
+/// # Arguments
+///
+/// * `title` - Optional title for the entry
+/// * `body` - Body content of the entry
+///
+/// # Returns
+///
+/// A formatted markdown string ready to be written to a log file.
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::entry::format_entry;
+///
+/// let formatted = format_entry(Some("Meeting notes"), "Discussed project timeline");
+/// // Returns something like: "## 14:30 - Meeting notes\n\nDiscussed project timeline\n"
+/// ```
 pub fn format_entry(title: Option<&str>, body: &str) -> String {
     match title {
         Some(title) if !title.is_empty() => {
@@ -95,6 +208,29 @@ pub fn format_entry(title: Option<&str>, body: &str) -> String {
     }
 }
 
+/// Appends a new entry to a log file.
+///
+/// Parses the content using git commit style, formats it with a timestamp,
+/// and appends it to the specified log file. Creates the file if it doesn't exist.
+///
+/// # Arguments
+///
+/// * `path` - Path to the log file
+/// * `content` - Raw content to parse and append
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened or written to.
+///
+/// # Example
+///
+/// ```rust
+/// use std::path::Path;
+/// use dailylog::entry::append_to_log;
+///
+/// let content = "Fixed bug\n\nResolved the authentication issue.";
+/// append_to_log(Path::new("2024-01-15.md"), content)?;
+/// ```
 pub fn append_to_log(path: &Path, content: &str) -> anyhow::Result<()> {
     let (title, body) = parse_entry(content);
     let formatted_entry = format_entry(title.as_deref(), &body);

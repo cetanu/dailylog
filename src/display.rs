@@ -1,9 +1,41 @@
+//! Terminal display and markdown rendering.
+//!
+//! This module handles colorized output to the terminal, including
+//! markdown rendering with syntax highlighting and styled display
+//! of log entries.
+
 use crate::entry::{get_previous_day_log_path, open_editor, append_to_log};
 use chrono::{Duration, Local};
 use std::fs;
 use std::io::Write;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
+/// Renders markdown content to the terminal with color highlighting.
+///
+/// Provides syntax highlighting for various markdown elements:
+/// - H1 headers: bright blue and bold
+/// - H2 headers: cyan and bold  
+/// - H3 headers: green and bold
+/// - List items: yellow bullets
+/// - Code blocks: gray background
+/// - Bold text: terminal bold formatting
+///
+/// # Arguments
+///
+/// * `content` - The markdown content to render
+///
+/// # Errors
+///
+/// Returns an error if writing to the terminal fails.
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::display::render_markdown_to_terminal;
+///
+/// let markdown = "# Title\n\n- List item\n- Another item";
+/// render_markdown_to_terminal(markdown)?;
+/// ```
 pub fn render_markdown_to_terminal(content: &str) -> anyhow::Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
 
@@ -69,6 +101,30 @@ pub fn render_markdown_to_terminal(content: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Displays the previous day's log entry with colorized output.
+///
+/// Reads and displays yesterday's log file with:
+/// - Styled header and footer showing the date
+/// - Markdown rendering with syntax highlighting
+/// - Appropriate messages if the file doesn't exist or is empty
+///
+/// # Arguments
+///
+/// * `log_dir` - The directory containing log files
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The log file cannot be read
+/// - Terminal output fails
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::display::view_previous_day_log;
+///
+/// view_previous_day_log("/path/to/logs")?;
+/// ```
 pub fn view_previous_day_log(log_dir: &str) -> anyhow::Result<()> {
     let log_path = get_previous_day_log_path(log_dir);
 
@@ -102,6 +158,33 @@ pub fn view_previous_day_log(log_dir: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Adds a new entry to the previous day's log file.
+///
+/// This function:
+/// 1. Shows existing content from yesterday's log (if any) with colorized display
+/// 2. Opens the user's editor to write a new entry
+/// 3. Appends the new entry to yesterday's log file
+/// 4. Provides appropriate feedback about the operation
+///
+/// # Arguments
+///
+/// * `log_dir` - The directory containing log files
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The existing log file cannot be read
+/// - The editor fails to open
+/// - The new entry cannot be written to the file
+/// - Terminal output fails
+///
+/// # Example
+///
+/// ```rust
+/// use dailylog::display::add_to_previous_day_log;
+///
+/// add_to_previous_day_log("/path/to/logs")?;
+/// ```
 pub fn add_to_previous_day_log(log_dir: &str) -> anyhow::Result<()> {
     let log_path = get_previous_day_log_path(log_dir);
     let yesterday = Local::now() - Duration::days(1);

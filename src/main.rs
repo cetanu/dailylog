@@ -1,3 +1,38 @@
+//! # dailylog
+//!
+//! A minimal journaling tool that provides a terminal-native experience for daily logging
+//! with git synchronization capabilities.
+//!
+//! ## Features
+//!
+//! - Opens your `$EDITOR` to write journal entries
+//! - Git commit style parsing: first line becomes title, body after blank line
+//! - Saves entries with timestamps in markdown format to `YYYY-MM-DD.md` files
+//! - Git sync support for backing up and sharing logs across devices
+//! - Log summarization with statistics and consistency tracking
+//! - Configurable via TOML configuration file
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Create a new log entry
+//! dailylog
+//!
+//! # View previous day's log
+//! dailylog previous
+//!
+//! # Add to previous day's log
+//! dailylog yesterday
+//!
+//! # Summarize past 7 days
+//! dailylog summary
+//!
+//! # Git sync operations
+//! dailylog sync
+//! dailylog pull
+//! dailylog push
+//! ```
+
 mod config;
 mod display;
 mod entry;
@@ -12,6 +47,7 @@ use git::{auto_sync_if_enabled, git_pull, git_push, git_sync};
 use std::fs;
 use summary::summarize_logs;
 
+/// Command-line interface for dailylog
 #[derive(Parser)]
 #[command(name = "dailylog")]
 #[command(about = "A minimal journaling tool")]
@@ -20,6 +56,7 @@ struct Cli {
     command: Option<Commands>,
 }
 
+/// Available subcommands for dailylog
 #[derive(Subcommand)]
 enum Commands {
     /// View the previous day's log entry
@@ -32,7 +69,7 @@ enum Commands {
         #[arg(short, long, default_value = "7")]
         days: u32,
     },
-    /// Sync logs with git repository
+    /// Sync logs with git repository (pull then push)
     Sync,
     /// Pull latest logs from git repository
     Pull,
@@ -41,6 +78,18 @@ enum Commands {
 }
 
 
+/// Main entry point for the dailylog application.
+///
+/// Parses command-line arguments and dispatches to the appropriate functionality:
+/// - No command: Create a new log entry for today
+/// - Subcommands: Execute specific operations (view, append, summarize, git sync)
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Configuration cannot be loaded
+/// - Log directory cannot be created
+/// - The requested operation fails
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let config = load_config()?;
