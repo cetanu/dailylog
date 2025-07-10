@@ -1,4 +1,4 @@
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Datelike, Duration, Local, NaiveDate, Weekday};
 use clap::{Parser, Subcommand};
 use dirs::home_dir;
 use serde::Deserialize;
@@ -48,6 +48,9 @@ struct Config {
 
     #[serde(default = "default_branch")]
     git_branch_name: String,
+
+    #[serde(default = "default_summary_days")]
+    summary_days: Vec<String>,
 }
 
 fn default_log_dir() -> String {
@@ -58,6 +61,16 @@ fn default_log_dir() -> String {
 
 fn default_branch() -> String {
     "master".to_string()
+}
+
+fn default_summary_days() -> Vec<String> {
+    vec![
+        "monday".to_string(),
+        "tuesday".to_string(),
+        "wednesday".to_string(),
+        "thursday".to_string(),
+        "friday".to_string(),
+    ]
 }
 
 fn load_config() -> anyhow::Result<Config> {
@@ -422,10 +435,31 @@ fn append_to_log(path: &Path, content: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn summarize_logs(log_dir: &str, days: u32) -> anyhow::Result<()> {
+fn parse_weekday(day_str: &str) -> Option<Weekday> {
+    match day_str.to_lowercase().as_str() {
+        "monday" | "mon" => Some(Weekday::Mon),
+        "tuesday" | "tue" => Some(Weekday::Tue),
+        "wednesday" | "wed" => Some(Weekday::Wed),
+        "thursday" | "thu" => Some(Weekday::Thu),
+        "friday" | "fri" => Some(Weekday::Fri),
+        "saturday" | "sat" => Some(Weekday::Sat),
+        "sunday" | "sun" => Some(Weekday::Sun),
+        _ => None,
+    }
+}
+
+fn summarize_logs(log_dir: &str, days: u32, config: &Config) -> anyhow::Result<()> {
     let today = Local::now().date_naive();
     let mut total_entries = 0;
     let mut entries_by_day = Vec::new();
+    let mut total_eligible_days = 0;
+
+    // Parse configured days into weekdays
+    let allowed_weekdays: Vec<Weekday> = config
+        .summary_days
+        .iter()
+        .filter_map(|day| parse_weekday(day))
+        .collect();
 
     // Print header
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
@@ -436,20 +470,28 @@ fn summarize_logs(log_dir: &str, days: u32) -> anyhow::Result<()> {
     // Collect entries for each day
     for i in 0..days {
         let date = today - Duration::days(i as i64);
-        let log_path = get_log_file_path_for_date(log_dir, date);
+        let weekday = date.weekday();
 
-        if log_path.exists() {
-            let content = fs::read_to_string(&log_path)?;
-            if !content.trim().is_empty() {
-                total_entries += 1;
+        // Check if this day is in our allowed days
+        if allowed_weekdays.contains(&weekday) {
+            total_eligible_days += 1;
+            let log_path = get_log_file_path_for_date(log_dir, date);
 
-                entries_by_day.push((date, content));
+            if log_path.exists() {
+                let content = fs::read_to_string(&log_path)?;
+                if !content.trim().is_empty() {
+                    total_entries += 1;
+                    entries_by_day.push((date, content));
+                }
             }
         }
     }
 
     if entries_by_day.is_empty() {
-        println!("No log entries found for the past {} days.", days);
+        println!(
+            "No log entries found for the past {} days on configured days.",
+            days
+        );
         return Ok(());
     }
 
@@ -460,9 +502,9 @@ fn summarize_logs(log_dir: &str, days: u32) -> anyhow::Result<()> {
     println!("- Total days with entries: {}", total_entries);
     println!(
         "- Logging consistency: {:.1}% ({}/{} days)",
-        (total_entries as f64 / days as f64) * 100.0,
+        (total_entries as f64 / total_eligible_days as f64) * 100.0,
         total_entries,
-        days
+        total_eligible_days
     );
 
     // Show entries by day (most recent first)
@@ -540,7 +582,7 @@ fn main() -> anyhow::Result<()> {
             auto_sync_if_enabled(&config)?;
         }
         Some(Commands::Summary { days }) => {
-            summarize_logs(&config.log_dir, days)?;
+            summarize_logs(&config.log_dir, days, &config)?;
         }
         Some(Commands::Sync) => {
             git_sync(&config)?;

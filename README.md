@@ -46,6 +46,11 @@ git_repo = "https://github.com/yourusername/dailylogs.git"
 
 # Optional: Enable automatic git sync after each log entry (default: false)
 git_auto_sync = true
+
+# Optional: Days to include in summary statistics (default: monday-friday)
+# Accepts: monday, tuesday, wednesday, thursday, friday, saturday, sunday
+# Short forms also work: mon, tue, wed, thu, fri, sat, sun
+summary_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
 ```
 
 Make sure the log directory exists, or `dailylog` will try to create it on first run.
@@ -112,7 +117,9 @@ dailylog summary -d 14
 ```
 
 This command provides:
-- **Summary statistics**: Total entries, logging consistency percentage
+- **Summary statistics**: Total entries, logging consistency percentage, by
+    default includes only Monday-Friday, but can be customized via `summary_days`
+    in config
 - **Daily breakdown**: Shows entry titles/headers for each day with entries
 - **Colorized output**: Easy-to-read format with different colors for different sections
 
