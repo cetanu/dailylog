@@ -103,6 +103,14 @@ dailylog previous
 dailylog yesterday
 ```
 
+### Edit today's log in-place
+
+```bash
+dailylog edit
+```
+
+This opens today's log file in your editor, allowing you to modify, add to, or reorganize your entries for the day.
+
 ### Summarize and review logs for past X days
 
 ```bash

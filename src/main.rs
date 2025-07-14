@@ -42,7 +42,7 @@ mod summary;
 use clap::{Parser, Subcommand};
 use config::load_config;
 use display::{add_to_previous_day_log, view_previous_day_log};
-use entry::{append_to_log, get_log_file_path, open_editor};
+use entry::{append_to_log, get_log_file_path, open_editor, edit_today_log};
 use git::{auto_sync_if_enabled, git_pull, git_push, git_sync};
 use std::fs;
 use summary::summarize_logs;
@@ -63,6 +63,8 @@ enum Commands {
     Previous,
     /// Add to the previous day's log entry
     Yesterday,
+    /// Edit today's log entry in-place
+    Edit,
     /// Summarize and review logs for the past X days
     Summary {
         /// Number of days to include in summary (default: 7)
@@ -101,6 +103,12 @@ fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Yesterday) => {
             add_to_previous_day_log(&config.log_dir)?;
+            auto_sync_if_enabled(&config)?;
+        }
+        Some(Commands::Edit) => {
+            let log_path = get_log_file_path(&config.log_dir);
+            edit_today_log(&log_path)?;
+            println!("Log updated at {:?}", log_path);
             auto_sync_if_enabled(&config)?;
         }
         Some(Commands::Summary { days }) => {

@@ -7,7 +7,7 @@
 use chrono::{Duration, Local, NaiveDate};
 use std::{
     env,
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -91,6 +91,45 @@ pub fn open_editor() -> anyhow::Result<String> {
     temp_path.push("dailylog.md");
 
     File::create(&temp_path)?;
+
+    Command::new(editor)
+        .arg(&temp_path)
+        .status()
+        .expect("Failed to launch editor");
+
+    let mut contents = String::new();
+    File::open(&temp_path)?.read_to_string(&mut contents)?;
+    Ok(contents)
+}
+
+/// Opens the user's preferred editor with existing content pre-loaded.
+///
+/// Creates a temporary file with the provided content and launches the editor.
+/// After the editor closes, reads and returns the modified content.
+///
+/// # Arguments
+///
+/// * `existing_content` - Content to pre-load in the editor
+///
+/// # Returns
+///
+/// The modified content from the editor as a string.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The temporary file cannot be created or written to
+/// - The editor fails to launch
+/// - The temporary file cannot be read after editing
+pub fn open_editor_with_content(existing_content: &str) -> anyhow::Result<String> {
+    let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+    let mut temp_path = env::temp_dir();
+    temp_path.push("dailylog.md");
+
+    // Write existing content to temp file
+    let mut file = File::create(&temp_path)?;
+    file.write_all(existing_content.as_bytes())?;
+    drop(file); // Ensure file is closed before opening in editor
 
     Command::new(editor)
         .arg(&temp_path)
@@ -238,6 +277,54 @@ pub fn append_to_log(path: &Path, content: &str) -> anyhow::Result<()> {
     if !formatted_entry.trim().is_empty() {
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         writeln!(file, "{}", formatted_entry)?;
+    }
+
+    Ok(())
+}
+
+/// Edits today's log file in-place using the user's preferred editor.
+///
+/// Reads the existing content of today's log file (if it exists), opens it in the editor,
+/// and saves the modified content back to the file. If the log file doesn't exist,
+/// starts with an empty file.
+///
+/// # Arguments
+///
+/// * `path` - Path to today's log file
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file cannot be read or written
+/// - The editor fails to launch
+/// - The temporary file operations fail
+///
+/// # Example
+///
+/// ```rust
+/// use std::path::Path;
+/// use dailylog::entry::edit_today_log;
+///
+/// edit_today_log(Path::new("2024-01-15.md"))?;
+/// ```
+pub fn edit_today_log(path: &Path) -> anyhow::Result<()> {
+    // Read existing content if the file exists
+    let existing_content = if path.exists() {
+        fs::read_to_string(path)?
+    } else {
+        String::new()
+    };
+
+    // Open editor with existing content
+    let new_content = open_editor_with_content(&existing_content)?;
+
+    // Only write if content has changed or if it's not empty
+    if new_content != existing_content && !new_content.trim().is_empty() {
+        fs::write(path, new_content)?;
+    } else if new_content.trim().is_empty() && path.exists() {
+        // If user cleared all content, remove the file
+        fs::remove_file(path)?;
+        println!("Log file removed (content was empty)");
     }
 
     Ok(())
